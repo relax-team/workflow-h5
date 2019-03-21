@@ -1,7 +1,7 @@
 {
     "name": "workflow-h5",
     "version": "1.0.0",
-    "description": "",
+    "description": "前端开发工作流之h5页面开发",
     "main": "gulpfile.js",
     "scripts": {
         "dev": "gulp",
@@ -26,19 +26,21 @@
     "homepage": "https://github.com/relax-team/workflow-h5/blob/master/README.md",
     "devDependencies": {
         "babel-core": "^6.26.3",
+        "babel-eslint": "^10.0.1",
         "babel-loader": "^8.0.4",
         "babel-preset-env": "^1.7.0",
         "cross-env": "^5.2.0",
-        "gulp": "^3.9.1",
+        "del": "^3.0.0",
+        "eslint": "^5.12.1",
+        "gulp": "^4.0.0",
         "gulp-autoprefixer": "^6.0.0",
         "gulp-babel": "^7.0.1",
-        "gulp-clean": "^0.4.0",
         "gulp-clean-css": "^4.0.0",
         "gulp-connect": "^5.6.1",
         "gulp-if": "^2.0.2",
         "gulp-less": "^4.0.1",
-        "gulp-notify": "^3.2.0",
         "gulp-plumber": "^1.2.1",
+        "gulp-rename": "^1.4.0",
         "gulp-pug": "^4.0.1",
         "gulp-replace": "^1.0.0",
         "gulp-rev": "^9.0.0",
@@ -46,7 +48,6 @@
         "gulp-sftp": "^0.1.5",
         "gulp-tinypng-nokey": "^1.1.0",
         "gulp-uglify": "^3.0.1",
-        "gulp-util": "^3.0.8",
-        "run-sequence": "^2.2.1"
+        "gulp-util": "^3.0.8"
     }
 }

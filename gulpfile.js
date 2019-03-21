@@ -1,4 +1,12 @@
-var gulp = require('gulp'),
+'use strict';
+
+/*
+* 说明：gulp版本4.0及以上
+* npm install gulp-cli -g
+* npm install gulp@4 -D
+* */
+
+const gulp = require('gulp'),
     pug = require('gulp-pug'),
     less = require('gulp-less'),
     babel = require("gulp-babel"),    //请勿升级至8.0及以上版本
@@ -7,32 +15,65 @@ var gulp = require('gulp'),
     autoprefixer = require('gulp-autoprefixer'),
     tiny = require('gulp-tinypng-nokey'),
     gulpif = require('gulp-if'),
-    clean = require('gulp-clean'),
+    del = require('del'),
     rev = require('gulp-rev'),
     revCollector = require('gulp-rev-collector'),
     replace = require('gulp-replace'),
+    rename = require('gulp-rename'),
     //当发生异常时提示错误 确保本地安装gulp-notify和gulp-plumber
-    notify = require('gulp-notify'),
     plumber = require('gulp-plumber'),
     gutil = require('gulp-util'),
-    runSequence = require('run-sequence'),
     sftp = require('gulp-sftp'),      // 自动部署静态资源
     connect = require('gulp-connect'); //自动刷新页面，解放F5
 
-//环境配置
-var config = {
-    production: {
-        compress: true,
-        staticPath: 'https://cnd.test.com/static'
-    },
-    development: {
-        compress: false,
-        staticPath: '/static'
+/*===== 获取用户配置文件，可修改 ====*/
+let config;
+try {
+    config = require('./config.custom.js'); // 获取用户配置
+} catch (e) {
+    try {
+        config = require('./config.js');    //默认配置
+    } catch (e) {
+        log(gutil.colors.red('丢失配置文件(config.js/config.custom.js)'));
     }
-}[process.env.NODE_ENV || 'development'];
+}
 
-//新建webserver
-gulp.task('webserver', function () {
+/*===== 相关路径配置 ====*/
+let paths = {
+    src: {
+        baseDir: 'src',
+        baseFiles: ['src/**/*', '!src/**/*.pug', '!src/**/*.less', '!src/**/*.css', '!src/**/*.ts', '!src/**/*.js', 'src/**/*.min.css', 'src/**/*.min.js'],
+        htmlFiles: ['src/**/*.pug'],
+        cssFiles: ['src/**/*.less', 'src/**/*.css', '!src/**/*.min.css'],
+        jsFiles: ['src/**/*.ts', 'src/**/*.js', '!src/**/*.min.js'],
+    },
+    dist: {
+        assetsDir: 'dist/assets',        //要上传到ftp或cdn的静态资源文件
+        baseDir: 'dist'
+    }
+};
+
+
+/*===== 定义主要任务方法 ====*/
+
+// 日志输出
+function log() {
+    let args = Array.prototype.slice.call(arguments);
+    gutil.log.apply(null, args);
+}
+
+// 替换目录路径
+function replaceDir(file) {
+    return file.replace(`${paths.src.baseDir}`, `${paths.dist.baseDir}`);
+}
+
+// clean 任务, dist 目录
+function removeFiles() {
+    return del(paths.dist.baseDir);
+}
+
+// 新建webserver
+function runServer() {
     connect.serverClose();
     connect.server({
         root: 'dist',
@@ -40,108 +81,119 @@ gulp.task('webserver', function () {
         port: 80,
         host: '0.0.0.0'
     });
-});
+}
 
-// 将pug文件转换为html
-gulp.task('pug', function () {
-    return gulp.src('src/page/**/*.pug')
-        .pipe(plumber({errorHandler: notify.onError('Error: <%= error.message %>')}))
+
+// 复制文件
+function copyFiles(file) {
+    let files = typeof file === 'string' ? file : paths.src.baseFiles;
+    return gulp.src(files, {allowEmpty: true})
+        .pipe(gulp.dest(paths.dist.baseDir));
+}
+
+// 编译.pug/.html
+function compileHTML(file) {
+    let files = typeof file === 'string' ? file : paths.src.htmlFiles;
+    return gulp.src(files, {allowEmpty: true})
+        .pipe(plumber())
+        .pipe(gulpif(!!config.assetsPath, replace('@assets', config.assetsPath)))
         .pipe(pug())
-        .pipe(replace(/@static/g, config.staticPath))
-        .pipe(gulp.dest('dist/'));
-});
+        .pipe(gulp.dest(paths.dist.baseDir));
+}
 
-//处理js
-gulp.task('js', function () {
-    return gulp.src(['src/static/**/*.js', '!src/static/**/*.min.js'])
-        .pipe(babel())
-        .pipe(gulpif(config.compress, uglify({mangle: {reserved: ['require', 'exports', 'module', '$']}}))) //排除混淆关键字
-        .on('error', function (err) {
-            gutil.log(gutil.colors.red('[Error]'), err);
-        })
-        .pipe(gulpif(config.compress, rev()))
-        .pipe(replace(/@static/g, config.staticPath))
-        .pipe(gulp.dest('dist/static/'))
-        .pipe(rev.manifest())
-        .pipe(gulp.dest('rev/js'));
-});
-
-//处理css
-gulp.task('css', function () {
-    return gulp.src(['src/static/**/*.css', '!src/static/**/*.min.css', 'src/static/**/*.less'])
+// 编译.less
+function compileCSS(file) {
+    let files = typeof file === 'string' ? file : paths.src.cssFiles;
+    return gulp.src(files, {allowEmpty: true})
+        .pipe(plumber())
+        .pipe(gulpif(!!config.assetsPath, replace('@assets', config.assetsPath)))
         .pipe(less())
         .pipe(autoprefixer())
+        .pipe(rename({extname: '.css'}))     //修改文件类型
         //.pipe(gulpif(config.compress, cleanCSS()))
-        .pipe(gulpif(config.compress, rev()))
-        .pipe(gulp.dest('dist/static/'))
+        .pipe(rev())
+        .pipe(gulp.dest(paths.dist.baseDir))
         .pipe(rev.manifest())
         .pipe(gulp.dest('rev/css'));
-});
+}
 
-//压缩图片
-gulp.task('tinypng', function () {
-    gulp.src('src/static/**/*.{png,jpg,jpeg,gif,ico}')
-        .pipe(tiny())
-        .pipe(gulp.dest('dist/static/'));
-});
+// 编译.ts/.js
+function compileJS(file) {
+    let files = typeof file === 'string' ? file : paths.src.jsFiles;
+    return gulp.src(files, {allowEmpty: true})
+        .pipe(plumber())
+        .pipe(gulpif(!!config.assetsPath, replace('@assets', config.assetsPath)))
+        .pipe(babel())
+        .pipe(gulpif(config.compress, uglify({mangle: {reserved: ['require', 'exports', 'module', '$']}}))) //排除混淆关键字
+        .pipe(rev())
+        .pipe(gulp.dest(paths.dist.baseDir))
+        .pipe(rev.manifest())
+        .pipe(gulp.dest('rev/js'));
+}
 
-//拷贝静态资源文件
-gulp.task('copy', function () {
-    return gulp.src([
-        'src/static/**'
-    ])
-        .pipe(gulp.dest('dist/static/'))
-});
+// 监听文件
+function watch() {
+    let watcher = gulp.watch([paths.src.baseDir], {ignored: /[/\\]\./});
+    return watcher.on('all', watchHandler);
+}
 
-//md5 替换路径
-gulp.task('revCollector', function () {
+function watchHandler(event, file) {
+    log(`${gutil.colors.yellow(file)} ${event}, running task...`);
+
+    file = file.replace(/\\/, '/');    //替换路径分隔符, 只替换第一个'\', 重要！
+    let ext_name = path.extname(file);
+    if (event === 'unlink') {
+        let tmp = replaceDir(file);
+        if (ext_name === '.less') {
+            tmp = tmp.replace(ext_name, '.css');
+        }
+        del(tmp);
+    } else {
+        if (ext_name === '.less') {
+            compileCSS(file);  // 样式 文件
+        } else if (ext_name === '.pug') {
+            compileHTML(file); // html 文件
+        } else {
+            copyFiles(file);
+        }
+    }
+}
+
+
+// 上传静态资源文件到FTP
+function uploadFTP() {
+    return gulp.src(paths.dist.assetsDir)
+        .pipe(sftp(config.ftp));
+}
+
+// 替换md5路径
+function revReplace() {
     return gulp.src(['rev/**/*.json', 'dist/**/*.html'])
         .pipe(revCollector())
         .pipe(gulp.dest('dist'));
-});
-
-//定义看守任务
-gulp.task('watch', function () {
-    gulp.watch(['src/**/*.pug'], ['pug']).on('change', function (e) {
-        livereload(e, ['pug']);
-    });
-    gulp.watch(['src/static/**/*.js']).on('change', function (e) {
-        livereload(e, ['js']);
-    });
-    gulp.watch(['src/static/**/*.css', 'src/static/**/*.less']).on('change', function (e) {
-        livereload(e, ['css']);
-    });
-});
-
-//浏览器自动刷新
-function livereload(e, task) {
-    runSequence(task, function () {
-        gutil.log(gutil.colors.green('恭喜，热更新完成！', JSON.stringify(e)));
-        gulp.src(e.path)
-            .pipe(connect.reload())
-    });
 }
 
-//清除dist目录
-gulp.task('clean', function () {
-    return gulp.src('dist/')
-        .pipe(clean())
-});
-
-// 上传FTP
-gulp.task('ftp', function () {
-    gutil.log(gutil.colors.green('恭喜，FTP上传完成！'));
-});
-
-//构建
-gulp.task('dev', function () {
-    gutil.log(gutil.colors.green('恭喜，服务启动成功！'));
-});
-
-//发布
-gulp.task('build', ['clean'], function () {
-    gutil.log(gutil.colors.green('恭喜，构建完成！'));
-});
+// 浏览器自动刷新
+function liveReload(path) {
+    return gulp.src(path)
+        .pipe(connect.reload())
+}
 
 
-gulp.task('default', ['dev', 'watch', 'webserver']);
+/*======= 注冊任務 =======*/
+
+gulp.task('clean', removeFiles);  // 删除任务
+gulp.task('FTP', uploadFTP);    // 上传FTP
+
+// 开发
+gulp.task('dev', gulp.series(
+    copyFiles,
+    gulp.parallel(
+        compileCSS,
+        compileHTML,
+        compileJS,
+    ),
+    revReplace,
+    runServer,
+    watch
+));
