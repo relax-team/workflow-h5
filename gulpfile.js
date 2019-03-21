@@ -96,8 +96,8 @@ function compileHTML(file) {
     let files = typeof file === 'string' ? file : paths.src.htmlFiles;
     return gulp.src(files, {allowEmpty: true})
         .pipe(plumber())
-        .pipe(gulpif(!!config.assetsPath, replace('@assets', config.assetsPath)))
         .pipe(pug())
+        .pipe(gulpif(!!config.assetsPath, replace('@assets', config.assetsPath)))
         .pipe(gulp.dest(paths.dist.baseDir));
 }
 
@@ -106,8 +106,8 @@ function compileCSS(file) {
     let files = typeof file === 'string' ? file : paths.src.cssFiles;
     return gulp.src(files, {allowEmpty: true})
         .pipe(plumber())
-        .pipe(gulpif(!!config.assetsPath, replace('@assets', config.assetsPath)))
         .pipe(less())
+        .pipe(gulpif(!!config.assetsPath, replace('@assets', config.assetsPath)))
         .pipe(autoprefixer())
         .pipe(rename({extname: '.css'}))     //修改文件类型
         //.pipe(gulpif(config.compress, cleanCSS()))
@@ -122,8 +122,8 @@ function compileJS(file) {
     let files = typeof file === 'string' ? file : paths.src.jsFiles;
     return gulp.src(files, {allowEmpty: true})
         .pipe(plumber())
-        .pipe(gulpif(!!config.assetsPath, replace('@assets', config.assetsPath)))
         .pipe(babel())
+        .pipe(gulpif(!!config.assetsPath, replace('@assets', config.assetsPath)))
         .pipe(gulpif(config.compress, uglify({mangle: {reserved: ['require', 'exports', 'module', '$']}}))) //排除混淆关键字
         .pipe(rev())
         .pipe(gulp.dest(paths.dist.baseDir))
