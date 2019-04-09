@@ -29,13 +29,18 @@ const gulp = require('gulp'),
 /*===== 获取用户配置文件，可修改 ====*/
 let config;
 try {
-    config = require('./config.custom.js'); // 获取用户配置
+    config = require('./config.js');    //默认配置
 } catch (e) {
-    try {
-        config = require('./config.js');    //默认配置
-    } catch (e) {
-        log(gutil.colors.red('丢失配置文件(config.js/config.custom.js)'));
-    }
+    return log(gutil.colors.red('丢失配置文件config.js'));
+}
+
+/*=== 处理环境变量 ===*/
+const {NODE_ENV = 'development'} = process.env;
+log(gutil.colors.green('当前编译环境', NODE_ENV));
+
+let isLocal = NODE_ENV === 'development';
+if (isLocal) {
+    config.assetsPath = '/assets';
 }
 
 /*===== 相关路径配置 ====*/
@@ -44,8 +49,8 @@ let paths = {
         baseDir: 'src',
         baseFiles: ['src/**/*', '!src/**/*.pug', '!src/**/*.less', '!src/**/*.css', '!src/**/*.ts', '!src/**/*.js', 'src/**/*.min.css', 'src/**/*.min.js'],
         htmlFiles: ['src/**/*.pug'],
-        cssFiles: ['src/**/*.less', 'src/**/*.css', '!src/**/*.min.css'],
-        jsFiles: ['src/**/*.ts', 'src/**/*.js', '!src/**/*.min.js'],
+        cssFiles: ['src/assets/**/*.less', 'src/assets/**/*.css', '!src/**/*.min.css'],
+        jsFiles: ['src/assets/**/*.ts', 'src/assets/**/*.js', '!src/**/*.min.js'],
     },
     dist: {
         assetsDir: 'dist/assets',        //要上传到ftp或cdn的静态资源文件
@@ -69,7 +74,7 @@ function replaceDir(file) {
 
 // clean 任务, dist 目录
 function removeFiles() {
-    return del(paths.dist.baseDir);
+    return del([paths.dist.baseDir, 'rev']);
 }
 
 // 新建webserver
@@ -110,9 +115,9 @@ function compileCSS(file) {
         .pipe(gulpif(!!config.assetsPath, replace('@assets', config.assetsPath)))
         .pipe(autoprefixer())
         .pipe(rename({extname: '.css'}))     //修改文件类型
-        //.pipe(gulpif(config.compress, cleanCSS()))
-        .pipe(rev())
-        .pipe(gulp.dest(paths.dist.baseDir))
+        //.pipe(gulpif(!isLocal, cleanCSS()))
+        .pipe(gulpif(!isLocal, rev()))
+        .pipe(gulp.dest(`${paths.dist.baseDir}/assets`))
         .pipe(rev.manifest())
         .pipe(gulp.dest('rev/css'));
 }
@@ -124,9 +129,9 @@ function compileJS(file) {
         .pipe(plumber())
         .pipe(babel())
         .pipe(gulpif(!!config.assetsPath, replace('@assets', config.assetsPath)))
-        .pipe(gulpif(config.compress, uglify({mangle: {reserved: ['require', 'exports', 'module', '$']}}))) //排除混淆关键字
-        .pipe(rev())
-        .pipe(gulp.dest(paths.dist.baseDir))
+        .pipe(gulpif(!isLocal, uglify({mangle: {reserved: ['require', 'exports', 'module', '$']}}))) //排除混淆关键字
+        .pipe(gulpif(!isLocal, rev()))
+        .pipe(gulp.dest(`${paths.dist.baseDir}/assets`))
         .pipe(rev.manifest())
         .pipe(gulp.dest('rev/js'));
 }

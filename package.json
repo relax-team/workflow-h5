@@ -4,8 +4,9 @@
     "description": "前端开发工作流之h5页面开发",
     "main": "gulpfile.js",
     "scripts": {
-        "dev": "gulp",
-        "build": "cross-env NODE_ENV=production gulp build",
+        "dev": "gulp dev",
+        "pre-publish": "cross-env NODE_ENV=production gulp dev",
+        "clean": "gulp clean",
         "tinypng": "gulp tinypng",
         "ftp": "gulp ftp",
         "eslint": "eslint src --ext .js",
